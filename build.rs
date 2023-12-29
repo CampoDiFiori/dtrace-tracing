@@ -9,7 +9,8 @@ fn main() {
     let out_dir = PathBuf::from_str(&std::env::var("OUT_DIR").unwrap()).unwrap();
 
     let wrapper = out_dir.join("wrapper.c");
-    generate_wrapper_source_file(&provider, &wrapper).unwrap();
+    let bindings = PathBuf::from_str("src/bindings.rs").unwrap();
+    generate_wrapper_source_file(&provider, &wrapper, &bindings).unwrap();
 
     // Run DTrace to generate the .h file from provider.d
     let _h = {
@@ -34,7 +35,7 @@ fn main() {
             .get_compiler()
             .to_command()
             .arg("-c")
-            .arg(wrapper)
+            .arg(&wrapper)
             .arg("-o")
             .arg(&res)
             .status()
@@ -89,6 +90,7 @@ fn main() {
 fn generate_wrapper_source_file(
     provider: &Path,
     output_path: &Path,
+    rust_bindings_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = dtrace_parser::File::from_file(provider)?;
     let provider = file.providers().first().cloned().unwrap();
@@ -119,6 +121,14 @@ fn generate_wrapper_source_file(
     }
 
     writer.flush()?;
+
+    bindgen::Builder::default()
+        .allowlist_item(format!("{provider_name}.*"))
+        .header(output_path.to_str().unwrap())
+        .generate()
+        .unwrap()
+        .write_to_file(rust_bindings_path)
+        .unwrap();
 
     Ok(())
 }

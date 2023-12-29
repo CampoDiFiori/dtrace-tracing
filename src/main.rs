@@ -1,12 +1,11 @@
+mod bindings;
+
 use std::ffi::CString;
 
 use tracing::{field::Visit, info, instrument, span};
 use tracing_subscriber::{filter, prelude::__tracing_subscriber_SubscriberExt, Layer};
 
-extern "C" {
-    pub fn tracing_provider_trace(arg1: *mut ::std::os::raw::c_char);
-    pub fn tracing_provider_enter(arg1: *mut ::std::os::raw::c_char);
-}
+use crate::bindings::*;
 
 pub struct U;
 
