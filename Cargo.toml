@@ -1,0 +1,17 @@
+[package]
+name = "tracing-usdt"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.193"
+serde_json = "1.0.108"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+
+[build-dependencies]
+bindgen = "0.69.1"
+cc = "1.0.83"
+dtrace-parser = "0.1.15"
