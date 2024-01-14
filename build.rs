@@ -4,13 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
+use bindgen::RegexSet;
+
 fn main() {
     let provider = PathBuf::from_str("provider.d").unwrap();
     let out_dir = PathBuf::from_str(&std::env::var("OUT_DIR").unwrap()).unwrap();
-
-    let wrapper = out_dir.join("wrapper.c");
-    let bindings = PathBuf::from_str("src/bindings.rs").unwrap();
-    generate_wrapper_source_file(&provider, &wrapper, &bindings).unwrap();
 
     // Run DTrace to generate the .h file from provider.d
     let _h = {
@@ -27,6 +25,10 @@ fn main() {
         assert!(res.exists());
         res
     };
+
+    let wrapper = out_dir.join("wrapper.c");
+    let bindings = PathBuf::from_str("src/bindings.rs").unwrap();
+    generate_wrapper_source_file(&provider, &wrapper, &bindings).unwrap();
 
     // Generate an object file that encapsulates DTrace probes
     let obj = {
@@ -93,37 +95,54 @@ fn generate_wrapper_source_file(
     rust_bindings_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = dtrace_parser::File::from_file(provider)?;
-    let provider = file.providers().first().cloned().unwrap();
-
-    let provider_name = provider.name.clone();
-
     let output = std::fs::File::create(output_path)?;
     let mut writer = BufWriter::new(output);
     writeln!(writer, r#"#include "provider.h""#)?;
     writeln!(writer)?;
 
-    for probe in provider.probes {
-        writeln!(
-            writer,
-            r#"void {}_{}({}) {{"#,
-            &provider_name,
-            &probe.name,
-            collect_args(&probe.types, CollectArgsOptions { with_types: true })
-        )?;
-        writeln!(
-            writer,
-            r#"    {}_{}({});"#,
-            provider_name.to_uppercase(),
-            probe.name.to_uppercase(),
-            collect_args(&probe.types, CollectArgsOptions { with_types: false })
-        )?;
-        writeln!(writer, "}}\n")?;
+    let mut provider_regex = RegexSet::new();
+
+    for provider in file.providers() {
+        let provider_name = &provider.name;
+        for probe in provider.probes.iter() {
+            // probe implementation
+            writeln!(
+                writer,
+                r#"void {}_{}({}) {{"#,
+                &provider_name,
+                &probe.name,
+                collect_args(&probe.types, CollectArgsOptions { with_types: true })
+            )?;
+            writeln!(
+                writer,
+                r#"    {}_{}({});"#,
+                provider_name.to_uppercase(),
+                probe.name.to_uppercase(),
+                collect_args(&probe.types, CollectArgsOptions { with_types: false })
+            )?;
+            writeln!(writer, "}}\n")?;
+            // probe enabled
+            writeln!(
+                writer,
+                r#"int {}_{}_enabled(void) {{"#,
+                &provider_name, &probe.name,
+            )?;
+            writeln!(
+                writer,
+                r#"    return {}_{}_ENABLED();"#,
+                provider_name.to_uppercase(),
+                probe.name.to_uppercase(),
+            )?;
+            writeln!(writer, "}}\n")?;
+        }
+
+        provider_regex.insert(format!("{provider_name}.*"));
     }
 
     writer.flush()?;
 
     bindgen::Builder::default()
-        .allowlist_item(format!("{provider_name}.*"))
+        .allowlist_item(provider_regex.get_items().join("|"))
         .header(output_path.to_str().unwrap())
         .generate()
         .unwrap()

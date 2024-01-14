@@ -2,7 +2,7 @@ mod bindings;
 
 use std::ffi::CString;
 
-use tracing::{field::Visit, info, instrument, span};
+use tracing::{field::Visit, info, instrument, span, Level};
 use tracing_subscriber::{filter, prelude::__tracing_subscriber_SubscriberExt, Layer};
 
 use crate::bindings::*;
@@ -15,21 +15,38 @@ impl Default for U {
     }
 }
 
-struct RecordVisitor<'a> {
-    s: &'a mut String,
+struct RecordVisitor {
+    message: String,
+    fields: serde_json::Map<String, serde_json::Value>,
 }
 
-impl Visit for RecordVisitor<'_> {
+impl Visit for RecordVisitor {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            self.s.push_str(&format!("{value:?}"));
+            self.message = format!("{value:?}");
         }
+
+        self.fields.insert(
+            field.name().to_owned(),
+            serde_json::Value::String(format!("{value:?}")),
+        );
     }
 }
 
-impl<'a> RecordVisitor<'a> {
-    pub fn new(s: &'a mut String) -> Self {
-        Self { s }
+impl RecordVisitor {
+    fn new() -> Self {
+        Self {
+            message: String::new(),
+            fields: Default::default(),
+        }
+    }
+
+    fn fields(&self) -> String {
+        serde_json::to_string(&self.fields).unwrap()
+    }
+
+    fn message(self) -> String {
+        self.message
     }
 }
 
@@ -42,35 +59,31 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let mut s1 = "Hello from tracing: ".to_string();
-        let mut rv = RecordVisitor::new(&mut s1);
+        let mut rv = RecordVisitor::new();
         event.record(&mut rv);
-    }
-
-    fn on_layer(&mut self, subscriber: &mut S) {
-        let _ = subscriber;
-        // usdt::register_probes().unwrap();
-    }
-
-    fn on_enter(&self, _id: &span::Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // let Some(s1) = ctx.span(id) else {
-        //     return;
-        // };
 
         unsafe {
-            let c = CString::new("hello").unwrap();
-            tracing_provider_trace(c.into_raw());
+            let c = CString::new(rv.fields()).unwrap();
+            tracing_event(c.into_raw());
         }
     }
 
-    fn on_exit(&self, _id: &span::Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_new_span(
+        &self,
+        attrs: &span::Attributes<'_>,
+        _id: &span::Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut rv = RecordVisitor::new();
+        attrs.record(&mut rv);
         unsafe {
-            let c = CString::new("bye").unwrap();
-            tracing_provider_enter(c.into_raw());
+            let c = CString::new(rv.fields()).unwrap();
+            tracing_enter(c.into_raw());
         }
     }
 }
 
+#[instrument]
 pub fn main() {
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(filter::LevelFilter::WARN))
@@ -81,7 +94,7 @@ pub fn main() {
     let mut i = 0;
     loop {
         if i % 2 == 0 {
-            even();
+            even(i, i % 3 == 0);
         } else {
             odd();
         }
@@ -91,10 +104,16 @@ pub fn main() {
     }
 }
 
-#[instrument]
-fn even() {
+#[instrument(ret)]
+fn even(mut arg0: i32, arg1: bool) -> i32 {
     info!("Even called");
-    // probes::trace!(|| "Stuff");
+
+    if arg1 {
+        arg0 += 1;
+        arg0
+    } else {
+        0
+    }
 }
 
 #[instrument]
