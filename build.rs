@@ -48,6 +48,7 @@ fn main() {
     };
 
     // Link provider and probe definitions with a user application
+    #[cfg(not(target_os = "macos"))]
     let dobj = {
         let res = out_dir.join("provider.o");
         let status = Command::new("dtrace")
@@ -67,6 +68,7 @@ fn main() {
     // Compile a .so file that will be linked to the final binary
     {
         let res = out_dir.join("librustracing.so");
+        #[cfg(not(target_os = "macos"))]
         let status = cc::Build::new()
             .get_compiler()
             .to_command()
@@ -76,6 +78,17 @@ fn main() {
             .arg("-fPIC")
             .arg(obj)
             .arg(dobj)
+            .status()
+            .unwrap();
+        #[cfg(target_os = "macos")]
+        let status = cc::Build::new()
+            .get_compiler()
+            .to_command()
+            .arg("-shared")
+            .arg("-o")
+            .arg(&res)
+            .arg("-fPIC")
+            .arg(obj)
             .status()
             .unwrap();
         assert!(status.success());

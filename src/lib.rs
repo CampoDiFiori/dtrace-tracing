@@ -139,25 +139,25 @@ where
         }
     }
 
-    fn on_exit(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        if unsafe { tracing_exit_enabled() } == 0 {
-            return;
-        }
+    // fn on_exit(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+    //     if unsafe { tracing_exit_enabled() } == 0 {
+    //         return;
+    //     }
 
-        let mut rv = RecordVisitor::new();
-        attrs.record(&mut rv);
+    //     let mut rv = RecordVisitor::new();
+    //     attrs.record(&mut rv);
 
-        unsafe {
-            let n = CString::new(attrs.metadata().name()).unwrap();
-            let c = CString::new(rv.fields()).unwrap();
+    //     unsafe {
+    //         let n = CString::new(attrs.metadata().name()).unwrap();
+    //         let c = CString::new(rv.fields()).unwrap();
 
-            let n_ptr = n.into_raw();
-            let c_ptr = c.into_raw();
+    //         let n_ptr = n.into_raw();
+    //         let c_ptr = c.into_raw();
 
-            tracing_exit(n_ptr, c_ptr);
+    //         tracing_exit(n_ptr, c_ptr);
 
-            _ = CString::from_raw(n_ptr);
-            _ = CString::from_raw(c_ptr);
-        }
-    }
+    //         _ = CString::from_raw(n_ptr);
+    //         _ = CString::from_raw(c_ptr);
+    //     }
+    // }
 }
