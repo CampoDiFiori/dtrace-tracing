@@ -26,13 +26,13 @@ fn main() {
         res
     };
 
-    let wrapper = out_dir.join("wrapper.c");
+    let wrapper = out_dir.join("rustracing.c");
     let bindings = PathBuf::from_str("src/bindings.rs").unwrap();
     generate_wrapper_source_file(&provider, &wrapper, &bindings).unwrap();
 
     // Generate an object file that encapsulates DTrace probes
     let obj = {
-        let res = out_dir.join("wrapper.o");
+        let res = out_dir.join("rustracing.o");
         let status = cc::Build::new()
             .get_compiler()
             .to_command()
@@ -66,7 +66,7 @@ fn main() {
 
     // Compile a .so file that will be linked to the final binary
     {
-        let res = out_dir.join("libwrapper.so");
+        let res = out_dir.join("librustracing.so");
         let status = cc::Build::new()
             .get_compiler()
             .to_command()
@@ -84,7 +84,7 @@ fn main() {
 
     println!("cargo:rustc-env=LD_LIBRARY_PATH={}", out_dir.display());
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=dylib=wrapper");
+    println!("cargo:rustc-link-lib=dylib=rustracing");
 
     println!("cargo:rerun-if-changed={}", provider.display());
 }

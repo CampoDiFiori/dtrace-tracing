@@ -1,12 +1,12 @@
 use tracing::{info, instrument};
 use tracing_subscriber::{filter, prelude::__tracing_subscriber_SubscriberExt, Layer};
-use tracing_usdt::UstdTracingLayer;
+use tracing_usdt::USDTTracingLayer;
 
 #[instrument]
 pub fn main() {
     let subscriber = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(filter::LevelFilter::WARN))
-        .with(UstdTracingLayer);
+        // .with(tracing_subscriber::fmt::layer().with_filter(filter::LevelFilter::INFO))
+        .with(USDTTracingLayer);
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
 

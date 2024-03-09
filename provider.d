@@ -1,11 +1,10 @@
 provider tracing {
-    probe trace(char *);
-    probe debug(char *);
-    probe info(char *);
-    probe warn(char *);
-    probe error(char *);
-    probe enter(char *);
-    probe exit(char *);
-    probe record(char *);
-    probe event(char *);
+    probe trace(char *, char*, char *);
+    probe debug(char *, char*, char *);
+    probe info(char *, char*, char *);
+    probe warn(char *, char*, char *);
+    probe error(char *, char*, char *);
+    probe event(char *, char *, char*);
+    probe enter(char *, char *);
+    probe exit(char *, char *);
 };

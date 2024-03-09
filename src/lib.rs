@@ -2,14 +2,13 @@ mod bindings;
 
 use std::ffi::CString;
 
-use tracing::{field::Visit, info, instrument, span, Level};
-use tracing_subscriber::{filter, prelude::__tracing_subscriber_SubscriberExt, Layer};
+use tracing::{field::Visit, span};
 
 use crate::bindings::*;
 
-pub struct UstdTracingLayer;
+pub struct USDTTracingLayer;
 
-impl Default for UstdTracingLayer {
+impl Default for USDTTracingLayer {
     fn default() -> Self {
         Self
     }
@@ -50,7 +49,7 @@ impl RecordVisitor {
     }
 }
 
-impl<S> tracing_subscriber::Layer<S> for UstdTracingLayer
+impl<S> tracing_subscriber::Layer<S> for USDTTracingLayer
 where
     S: tracing::Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
@@ -59,12 +58,58 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        if unsafe {
+            [
+                tracing_event_enabled(),
+                tracing_trace_enabled(),
+                tracing_debug_enabled(),
+                tracing_info_enabled(),
+                tracing_warn_enabled(),
+                tracing_error_enabled(),
+            ]
+            .iter()
+            .all(|&e| e == 0)
+        } {
+            return;
+        }
+        dbg!("running");
+
         let mut rv = RecordVisitor::new();
         event.record(&mut rv);
 
+        event.metadata().level();
+
         unsafe {
+            let n = CString::new(event.metadata().name()).unwrap();
             let c = CString::new(rv.fields()).unwrap();
-            tracing_event(c.into_raw());
+            let m = CString::new(rv.message()).unwrap();
+
+            let n_ptr = n.into_raw();
+            let m_ptr = m.into_raw();
+            let c_ptr = c.into_raw();
+
+            if tracing_event_enabled() == 1 {
+                tracing_event(n_ptr, m_ptr, c_ptr);
+            }
+            if tracing_trace_enabled() == 1 {
+                tracing_trace(n_ptr, m_ptr, c_ptr);
+            }
+            if tracing_debug_enabled() == 1 {
+                tracing_debug(n_ptr, m_ptr, c_ptr);
+            }
+            if tracing_info_enabled() == 1 {
+                tracing_info(n_ptr, m_ptr, c_ptr);
+            }
+            if tracing_warn_enabled() == 1 {
+                tracing_warn(n_ptr, m_ptr, c_ptr);
+            }
+            if tracing_error_enabled() == 1 {
+                tracing_error(n_ptr, m_ptr, c_ptr);
+            }
+
+            _ = CString::from_raw(n_ptr);
+            _ = CString::from_raw(m_ptr);
+            _ = CString::from_raw(c_ptr);
         }
     }
 
@@ -74,49 +119,45 @@ where
         _id: &span::Id,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        if unsafe { tracing_enter_enabled() } == 0 {
+            return;
+        }
+
         let mut rv = RecordVisitor::new();
         attrs.record(&mut rv);
         unsafe {
+            let n = CString::new(attrs.metadata().name()).unwrap();
             let c = CString::new(rv.fields()).unwrap();
-            tracing_enter(c.into_raw());
+
+            let n_ptr = n.into_raw();
+            let c_ptr = c.into_raw();
+
+            tracing_enter(n_ptr, c_ptr);
+
+            _ = CString::from_raw(n_ptr);
+            _ = CString::from_raw(c_ptr);
         }
     }
-}
 
-#[instrument]
-pub fn main() {
-    let subscriber = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(filter::LevelFilter::WARN))
-        .with(UstdTracingLayer);
-
-    tracing::subscriber::set_global_default(subscriber).unwrap();
-
-    let mut i = 0;
-    loop {
-        if i % 2 == 0 {
-            even(i, i % 3 == 0);
-        } else {
-            odd();
+    fn on_exit(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if unsafe { tracing_exit_enabled() } == 0 {
+            return;
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        i += 1;
+        let mut rv = RecordVisitor::new();
+        attrs.record(&mut rv);
+
+        unsafe {
+            let n = CString::new(attrs.metadata().name()).unwrap();
+            let c = CString::new(rv.fields()).unwrap();
+
+            let n_ptr = n.into_raw();
+            let c_ptr = c.into_raw();
+
+            tracing_exit(n_ptr, c_ptr);
+
+            _ = CString::from_raw(n_ptr);
+            _ = CString::from_raw(c_ptr);
+        }
     }
-}
-
-#[instrument(ret)]
-fn even(mut arg0: i32, arg1: bool) -> i32 {
-    info!("Even called");
-
-    if arg1 {
-        arg0 += 1;
-        arg0
-    } else {
-        0
-    }
-}
-
-#[instrument]
-fn odd() {
-    info!("Odd called");
 }
